@@ -26,6 +26,7 @@ unsafe impl Sync for SafeStream {}
 
 struct State {
     is_recording: Arc<AtomicBool>,
+    is_paused: Arc<AtomicBool>,
     save_path: Arc<Mutex<Option<PathBuf>>>,
     writer: WavWriterHandle,
     stream: Arc<Mutex<Option<SafeStream>>>,
@@ -35,6 +36,7 @@ impl State {
     fn new() -> Self {
         Self {
             is_recording: Arc::new(AtomicBool::new(false)),
+            is_paused: Arc::new(AtomicBool::new(false)),
             save_path: Arc::new(Mutex::new(None)),
             writer: Arc::new(Mutex::new(None)),
             stream: Arc::new(Mutex::new(None)),
@@ -80,6 +82,7 @@ pub async fn start_recording<R: Runtime>(app_handle: AppHandle<R>) -> Result<(),
         return Err("Recording is already in progress.".to_string());
     }
     state.is_recording.store(true, Ordering::SeqCst);
+    state.is_paused.store(false, Ordering::SeqCst);
 
     let opt = Opt::parse();
 
@@ -211,6 +214,7 @@ pub async fn stop_recording() -> Result<PathBuf, String> {
         return Err("No recording in progress.".to_string());
     }
     state.is_recording.store(false, Ordering::SeqCst);
+    state.is_paused.store(false, Ordering::SeqCst);
 
     // Stop the stream
     if let Some(stream) = state.stream.lock().map_err(|err| err.to_string())?.take() {
@@ -231,6 +235,62 @@ pub async fn stop_recording() -> Result<PathBuf, String> {
         .ok_or("No recording in progress or save path not set.".to_string())?;
 
     Ok(save_path)
+}
+
+/// Pauses the current recording.
+///
+/// # Examples
+/// ```
+/// use tauri_plugin_mic_recorder::pause_recording;
+///
+/// pause_recording().unwrap();
+/// ```
+#[command]
+pub async fn pause_recording() -> Result<(), String> {
+    let state = STATE.lock().map_err(|err| err.to_string())?;
+    if !state.is_recording.load(Ordering::SeqCst) {
+        return Err("No recording in progress.".to_string());
+    }
+    if state.is_paused.load(Ordering::SeqCst) {
+        return Err("Recording is already paused.".to_string());
+    }
+
+    let stream_guard = state.stream.lock().map_err(|err| err.to_string())?;
+    let stream = stream_guard
+        .as_ref()
+        .ok_or("No active recording stream.".to_string())?;
+    stream.0.pause().map_err(|err| err.to_string())?;
+
+    state.is_paused.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+/// Resumes a paused recording.
+///
+/// # Examples
+/// ```
+/// use tauri_plugin_mic_recorder::resume_recording;
+///
+/// resume_recording().unwrap();
+/// ```
+#[command]
+pub async fn resume_recording() -> Result<(), String> {
+    let state = STATE.lock().map_err(|err| err.to_string())?;
+    if !state.is_recording.load(Ordering::SeqCst) {
+        return Err("No recording in progress.".to_string());
+    }
+    if !state.is_paused.load(Ordering::SeqCst) {
+        return Err("Recording is not paused.".to_string());
+    }
+
+    let stream_guard = state.stream.lock().map_err(|err| err.to_string())?;
+    let stream = stream_guard
+        .as_ref()
+        .ok_or("No active recording stream.".to_string())?;
+    stream.0.play().map_err(|err| err.to_string())?;
+
+    state.is_paused.store(false, Ordering::SeqCst);
+    Ok(())
 }
 
 /// Gets the path where the recording file is stored.

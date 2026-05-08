@@ -63,10 +63,12 @@ startRecording();
 
 ## Methods
 
-| Method           | Description             |
-| ---------------- | ----------------------- |
-| `startRecording` | Starts recording audio. |
-| `stopRecording`  | Stops recording audio.  |
+| Method            | Description                 |
+| ----------------- | --------------------------- |
+| `startRecording`  | Starts recording audio.     |
+| `stopRecording`   | Stops recording audio.      |
+| `pauseRecording`  | Pauses the current recording. |
+| `resumeRecording` | Resumes a paused recording. |
 
 ## Example
 

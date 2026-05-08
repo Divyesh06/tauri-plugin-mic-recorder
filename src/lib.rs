@@ -11,7 +11,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("mic-recorder")
         .invoke_handler(tauri::generate_handler![
             commands::start_recording,
-            commands::stop_recording
+            commands::stop_recording,
+            commands::pause_recording,
+            commands::resume_recording
         ])
         .build()
 }
